@@ -9,6 +9,10 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils import clip_grad_norm_
 
+# %%
+device = torch.device("cuda:0" )#if torch.cuda.is_available() else "cpu")
+print("Device: ", device)
+
 import torchaudio.transforms as transforms
 
 import numpy as np
@@ -21,7 +25,16 @@ from utils import psnr, AudioFile
 import torchaudio
 import soundfile as sf
 
-audio_file  =  "gt_bach.wav"#"gt_bach_reduced_V2.wav"#"gt_bach_reduced.wav" # "chirp.wav" # "pure_sine.wav" # "gt_bach.wav"
+
+# Random Initiation
+seed = 12
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+
+
+# Settings
+audio_file  =  "gt_bach.wav"  #"gt_bach_reduced_V2.wav"#"gt_bach_reduced.wav" # "chirp.wav" # "pure_sine.wav" # "gt_bach.wav"
 
 weight_dir = "weights/"
 audio_dir = "audio/"
@@ -33,24 +46,29 @@ os.makedirs(figures_dir, exist_ok=True)
 
 
 # %%
-niters = 5000
+niters = 10000
 local_batch_size = 1
 
-learning_rate = 1e-2  # Learning rate
-decay_rate = 1e-1# Decay rate
+learning_rate = 2e-4  # Learning rate
+decay_rate = 2e-2# Decay rate
 
 hidden_layers = 3
 hidden_features = 256
 
-# %%
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Device: ", device)
+b0 = 0.05
+T0 = 0.5#0.
+
+c0 = 0.1
+
+
 # %%
 audio = AudioFile(audio_file)
 dataloader = DataLoader(audio, shuffle=False, batch_size=1, pin_memory=True, num_workers=0)
 rate, coords, ground_truth = next(iter(dataloader))
 
-coords = coords.cuda()
+coords = coords.cuda() 
+coords = coords * 25
+
 gt = ground_truth.cuda()
 rate = rate[0].item()
 
@@ -218,9 +236,7 @@ class INR(nn.Module):
         output = self.net(coords)
         return output.real
 
-b0 = 0.05
-T0 = 0.5#0.01
-c0 = 1#0.05
+
 # %%
 model = INR(
     in_features=1,
@@ -361,7 +377,8 @@ ax2.grid(True, ls='--', alpha=0.5)
 ax2.legend()
 
 plt.tight_layout()
-plt.savefig(f"{figures_dir}/training_T0{T0}_C{c0}_b{b0}_LR_{learning_rate}.png", dpi=300)
+plt.savefig(f"{figures_dir}/training_T0{T0}_C{c0}_b{b0}_LR_{learning_rate}_itr_{niters}.png", dpi=300)
+plt.close()
 #plt.show()
 
 # ------------------- Print Summary -------------------
@@ -454,13 +471,14 @@ plt.subplot(2, 2, 4)
 plot_spectrogram(rec_audio, rate, plt.gca(), 'Spectrogram - Reconstructed')
 
 plt.tight_layout()
-plt.savefig(f"{figures_dir}/audioplot_T0{T0}_C{c0}_b{b0}_LR_{learning_rate}.png", dpi=300)
+plt.savefig(f"{figures_dir}/audioplot_T0{T0}_C{c0}_b{b0}_LR_{learning_rate}_itr_{niters}.png", dpi=300)
 #plt.show()
+plt.close()
 
 # ------------------- Optional: Save both audios -------------------
 #sf.write(f"{audio_dir}gt_{audio_file}", gt_audio, rate)
 sf.write(f"{audio_dir}rec_T{T0}_C{c0}_b{b0}.wav", rec_audio, rate)
-print(f"Saved: gt_{audio_file} and rec_T{T0}_C{c0}_b{b0}.wav")
+print(f"Saved: rec_T{T0}_C{c0}_b{b0}.wav")
 # plt.plot(  gt_audio - rec_audio)
 # plt.title("Error Plot (gt-rec)")
 # plt.show()
@@ -471,7 +489,8 @@ plt.grid()
 plt.title("Learning Rate Schedule")
 plt.xlabel("Iteration")
 plt.ylabel("Learning Rate")
-plt.savefig(f"{figures_dir}/lr_schedule_T0{T0}_C{c0}_b{b0}_LR_{learning_rate}.png", dpi=300)
+plt.savefig(f"{figures_dir}/lr_schedule_T0{T0}_C{c0}_b{b0}_LR_{learning_rate}_itr_{niters}.png", dpi=300)
+plt.close()
 #plt.show()
 # %%
 save_path = f"{weight_dir}test_save_T0{T0}_C0{c0}_b0{b0}_LR_{learning_rate}.pth"
